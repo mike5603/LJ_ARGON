@@ -9,7 +9,7 @@ import time
 
 class LJ_ARGON:
     # constants used in calculation
-    N = 864 # number of atoms
+    N = 2 # number of atoms
     sigma = 3.4e-10 # Lennard Jones parameter, m
     kb = 1.38e-23 # Boltzmann constant, J/K
     M = 39.95*1.6747e-27 # mass per atom (Argon)
@@ -17,14 +17,15 @@ class LJ_ARGON:
     L = 10.229*sigma # length of box
     R = 2.25*sigma # maximum radius of interactions
     R2 = R**2 # maximum radius of interaction squared
-    n = 10 # number of atoms per side of box in initial conditions
-    nstep = 5000 # number of time steps
+    a = L/6 # length of unit cell for fcc
+    a2 = a/2 # half of the unit cell length
+    nstep = 500000 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
     count = 1
-    simtemp = 0
+    simtemp = 0 # simulation temperature
     vacf = 0 #velocity autocorrelation function
-    vacf1 = 0
+    vacf1 = 0 #velocity autocorrelation function of first step to normalize
     
     xpositions = array.array('f')
     ypositions = array.array('f')
@@ -50,21 +51,44 @@ class LJ_ARGON:
             self.xforces.append(0)
             self.yforces.append(0)
             self.zforces.append(0)
-        self.initialposition()
+        #self.initialposition()
         self.initialvelocities()
-           
+        self.xpositions[1]= self.sigma
+        
             
     def initialposition(self):
         #assigns initial postions of atoms
         particle = 0
-        for x in range(0,self.n-1):
-            for y in range(0,self.n):
-                for z in range(0,self.n):
-                    if particle < self.N:
-                        self.xpositions[particle]= x*self.sigma*1.1
-                        self.ypositions[particle]= y*self.sigma
-                        self.zpositions[particle]= z*self.sigma
-                        particle += 1 
+        for x in range(0,6):
+            for y in range(0,6):
+                for z in range(0,6):
+                    self.xpositions[particle] = x*self.a
+                    self.ypositions[particle] = y*self.a
+                    self.zpositions[particle] = z*self.a
+                    particle += 1
+            
+            for y in range(0,6):
+                for z in range(0,6):
+                    self.xpositions[particle] = x*self.a
+                    self.ypositions[particle] = y*self.a + self.a2
+                    self.zpositions[particle] = z*self.a + self.a2
+                    particle += 1
+                    
+        for x in range(0,6):
+            for y in range(0,6):
+                for z in range(0,6):
+                    self.xpositions[particle] = x*self.a + self.a2
+                    self.ypositions[particle] = y*self.a
+                    self.zpositions[particle] = z*self.a + self.a2
+                    particle += 1
+                    
+            for y in range(0,6):
+                for z in range(0,6):
+                    self.xpositions[particle] = x*self.a + self.a2
+                    self.ypositions[particle] = y*self.a + self.a2
+                    self.zpositions[particle] = z*self.a
+                    particle += 1
+        
                         
     def initialvelocities(self):
         # assigns initial velocities to atoms according to a Boltzmann distrobution
@@ -115,6 +139,7 @@ class LJ_ARGON:
                 dz -= self.L*round(dz/self.L)
                 
                 r2 = dx**2 + dy**2 + dz**2
+                print("radius: " +str(math.sqrt(r2)))
                 
                 if r2 < self.R2:
                     sr2 = (self.sigma**2)/r2
