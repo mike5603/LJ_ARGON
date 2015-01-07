@@ -42,6 +42,11 @@ class LJ_ARGON:
     yforces = array.array('f')
     zforces = array.array('f')
     
+    initialxvelocities = array.array('f')
+    initialyvelocities = array.array('f')
+    initialzvelocities = array.array('f')
+    
+    
 
     def __init__(self):
         for i in range(0, self.N):
@@ -54,6 +59,9 @@ class LJ_ARGON:
             self.xforces.append(0)
             self.yforces.append(0)
             self.zforces.append(0)
+            self.initialxvelocities.append(0)
+            self.initialyvelocities.append(0)
+            self.initialzvelocities.append(0)
         self.initialposition()
         self.initialvelocities()
         
@@ -115,22 +123,32 @@ class LJ_ARGON:
             self.yvelocities[atom] -= self.sumvy/self.N
             self.zvelocities[atom] -= self.sumvz/self.N
             
-        self.initialxvelocities = self.xvelocities
-        self.initialyvelocities = self.yvelocities
-        self.initialzvelocities = self.zvelocities
+        for atom in range(0, self.N):
+            self.initialxvelocities[atom] = normdist[3*atom]
+            self.initialyvelocities[atom] = normdist[3*atom+1]
+            self.initialzvelocities[atom] = normdist[3*atom+2]
             
+        for atom in range(0,self.N):
+            self.initialxvelocities[atom] -= self.sumvx/self.N
+            self.initialyvelocities[atom] -= self.sumvy/self.N
+            self.initialzvelocities[atom] -= self.sumvz/self.N
+            
+        print(str(self.xvelocities[174]))
+        print(str(self.initialxvelocities[174]))
+        time.sleep(10)
+           
     def timestep(self):
         for step in range(0, self.nstep):
             self.updateforces()
             self.updatevelocities()
             self.updatepositions()
-            print("Step Number " + str(self.count))            
             #print('position ' + str(self.xpositions[238]))
             #print('velocity ' +str(self.xvelocities[238]))
             #print('force ' +str(self.xforces[238]))
             self.temperature()
             self.temprecalibration()
             self.velocityautocorrelation()
+            print("Step Number " + str(self.count))       
             self.count += 1
 
     def updateforces(self):
@@ -168,6 +186,9 @@ class LJ_ARGON:
             self.yvelocities[atom] += self.yforces[atom]/self.M*self.dt
             self.zvelocities[atom] += self.zforces[atom]/self.M*self.dt
             
+        print ('xvelocity atom 1: ' + str(self.xvelocities[174]))
+        print ('initial velocity: ' + str(self.initialxvelocities[174]))
+            
     def updatepositions(self):
         for atom in range(0,self.N):
             self.xpositions[atom] += self.xvelocities[atom]*self.dt
@@ -198,7 +219,7 @@ class LJ_ARGON:
        print("TEMP: " + str(self.simtemp))
        
     def temprecalibration(self):
-       if self.count > 125:
+       if self.count > 12:
            if self.simtemp > 100.0 or self.simtemp<80:
                print("temperature recalibration")
                for atom in range(0,self.N):
@@ -223,5 +244,3 @@ class LJ_ARGON:
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
         print("Velocity Autocorrelation Function: " + str(self.vacf))
-        cvacf = self.vacf *(self.temp/self.simtemp)
-        print("Corrected Autocorrelation Function: " + str(cvacf))
