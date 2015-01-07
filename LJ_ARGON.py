@@ -9,7 +9,7 @@ import time
 
 class LJ_ARGON:
     # constants used in calculation
-    N = 2 # number of atoms
+    N = 864 # number of atoms
     sigma = 3.4e-10 # Lennard Jones parameter, m
     kb = 1.38e-23 # Boltzmann constant, J/K
     M = 39.95*1.6747e-27 # mass per atom (Argon)
@@ -19,13 +19,16 @@ class LJ_ARGON:
     R2 = R**2 # maximum radius of interaction squared
     a = L/6 # length of unit cell for fcc
     a2 = a/2 # half of the unit cell length
-    nstep = 500000 # number of time steps
+    nstep = 5000 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
     count = 1
     simtemp = 0 # simulation temperature
     vacf = 0 #velocity autocorrelation function
     vacf1 = 0 #velocity autocorrelation function of first step to normalize
+    sumvx = 0
+    sumvy = 0
+    sumvz = 0
     
     xpositions = array.array('f')
     ypositions = array.array('f')
@@ -51,9 +54,9 @@ class LJ_ARGON:
             self.xforces.append(0)
             self.yforces.append(0)
             self.zforces.append(0)
-        #self.initialposition()
+        self.initialposition()
         self.initialvelocities()
-        self.xpositions[1]= self.sigma
+        
         
             
     def initialposition(self):
@@ -103,6 +106,14 @@ class LJ_ARGON:
             self.xvelocities[atom] = normdist[3*atom]
             self.yvelocities[atom] = normdist[3*atom+1]
             self.zvelocities[atom] = normdist[3*atom+2]
+            self.sumvx += self.xvelocities[atom]
+            self.sumvy += self.yvelocities[atom]
+            self.sumvz += self.zvelocities[atom]
+            
+        for atom in range(0,self.N):
+            self.xvelocities[atom] -= self.sumvx/self.N
+            self.yvelocities[atom] -= self.sumvy/self.N
+            self.zvelocities[atom] -= self.sumvz/self.N
             
         self.initialxvelocities = self.xvelocities
         self.initialyvelocities = self.yvelocities
@@ -139,7 +150,6 @@ class LJ_ARGON:
                 dz -= self.L*round(dz/self.L)
                 
                 r2 = dx**2 + dy**2 + dz**2
-                print("radius: " +str(math.sqrt(r2)))
                 
                 if r2 < self.R2:
                     sr2 = (self.sigma**2)/r2
@@ -213,5 +223,5 @@ class LJ_ARGON:
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
         print("Velocity Autocorrelation Function: " + str(self.vacf))
-        cvacf = self.vacf *math.sqrt(self.temp/self.simtemp)
+        cvacf = self.vacf *(self.temp/self.simtemp)
         print("Corrected Autocorrelation Function: " + str(cvacf))
