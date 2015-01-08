@@ -19,7 +19,7 @@ class LJ_ARGON:
     R2 = R**2 # maximum radius of interaction squared
     a = L/6 # length of unit cell for fcc
     a2 = a/2 # half of the unit cell length
-    nstep = 5000 # number of time steps
+    nstep = 250 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
     count = 1
@@ -29,6 +29,8 @@ class LJ_ARGON:
     sumvx = 0
     sumvy = 0
     sumvz = 0
+    dr = sigma/10
+    
     
     xpositions = array.array('f')
     ypositions = array.array('f')
@@ -46,7 +48,9 @@ class LJ_ARGON:
     initialyvelocities = array.array('f')
     initialzvelocities = array.array('f')
     
+    n = array.array('f')
     
+    g = array.array('f')
 
     def __init__(self):
         for i in range(0, self.N):
@@ -65,8 +69,10 @@ class LJ_ARGON:
         self.initialposition()
         self.initialvelocities()
         
+        for i in range(0,50):
+            self.n.append(0)
+            self.g.append(0)
         
-            
     def initialposition(self):
         #assigns initial postions of atoms
         particle = 0
@@ -133,9 +139,6 @@ class LJ_ARGON:
             self.initialyvelocities[atom] -= self.sumvy/self.N
             self.initialzvelocities[atom] -= self.sumvz/self.N
             
-        print(str(self.xvelocities[174]))
-        print(str(self.initialxvelocities[174]))
-        time.sleep(10)
            
     def timestep(self):
         for step in range(0, self.nstep):
@@ -148,7 +151,7 @@ class LJ_ARGON:
             self.temperature()
             self.temprecalibration()
             self.velocityautocorrelation()
-            print("Step Number " + str(self.count))       
+            print("--------------------Completed Step Number " + str(self.count) + "--------------------")       
             self.count += 1
 
     def updateforces(self):
@@ -186,8 +189,6 @@ class LJ_ARGON:
             self.yvelocities[atom] += self.yforces[atom]/self.M*self.dt
             self.zvelocities[atom] += self.zforces[atom]/self.M*self.dt
             
-        print ('xvelocity atom 1: ' + str(self.xvelocities[174]))
-        print ('initial velocity: ' + str(self.initialxvelocities[174]))
             
     def updatepositions(self):
         for atom in range(0,self.N):
@@ -219,7 +220,7 @@ class LJ_ARGON:
        print("TEMP: " + str(self.simtemp))
        
     def temprecalibration(self):
-       if self.count > 12:
+       if self.count > 125:
            if self.simtemp > 100.0 or self.simtemp<80:
                print("temperature recalibration")
                for atom in range(0,self.N):
@@ -244,3 +245,33 @@ class LJ_ARGON:
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
         print("Velocity Autocorrelation Function: " + str(self.vacf))
+    
+    def timeindependentcorrelationfunction(self):
+        start = time.time()       
+        for atom1 in range(0,self.N-1):
+            for atom2 in range(atom1,self.N):
+                dx = self.xpositions[atom1]-self.xpositions[atom2]
+                dy = self.ypositions[atom1]-self.ypositions[atom2]
+                dz = self.zpositions[atom1]-self.zpositions[atom2]
+                
+                dx -= self.L*round(dx/self.L)
+                dy -= self.L*round(dy/self.L)
+                dz -= self.L*round(dz/self.L)
+                
+                r2 = dx**2 + dy**2 + dz**2
+            
+                
+            for radius in range(0,50):
+                if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
+                    self.n[radius] += 1
+                    
+        for radius in range(1,50):
+            self.g[radius] = 2*self.L**3/self.N**2*self.n[radius]/4/math.pi/(radius*self.dr)**2/self.dr
+            
+        print("r                        g(r)")
+        
+        for radius in range(0,50):
+            print(str(radius*self.dr) + "                " + str(self.g[radius]))
+            
+        stop = time.time()
+        print(str(stop-start))
