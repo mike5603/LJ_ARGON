@@ -17,19 +17,22 @@ class LJ_ARGON:
     L = 10.229*sigma # length of box
     R = 2.25*sigma # maximum radius of interactions
     R2 = R**2 # maximum radius of interaction squared
-    a = L/6 # length of unit cell for fcc
+    ncell = int(math.ceil((N/4)**(1.0/3.0))) # number of fc unit cells in box
+    a = L/ncell # length of unit cell for fcc
     a2 = a/2 # half of the unit cell length
-    nstep = 250 # number of time steps
+    nstep = 500 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
-    count = 1
+    count = 1 # count of timesteps
     simtemp = 0 # simulation temperature
-    vacf = 0 #velocity autocorrelation function
-    vacf1 = 0 #velocity autocorrelation function of first step to normalize
-    sumvx = 0
-    sumvy = 0
-    sumvz = 0
-    dr = sigma/10
+    vacf = 0 # velocity autocorrelation function
+    vacf1 = 0 # velocity autocorrelation function of first step to normalize
+    sumvx = 0 # placeholder for later calculation
+    sumvy = 0 # placeholder for later calculation
+    sumvz = 0 # placeholder for later calculation
+    dr = sigma/10 # thickness of shell in pair distrobution function
+    maxr = 5*sigma # the maximum radius for pair distrobution function
+    npair = maxr/dr # number of shells in pair distrobution function
     
     
     xpositions = array.array('f')
@@ -76,31 +79,31 @@ class LJ_ARGON:
     def initialposition(self):
         #assigns initial postions of atoms
         particle = 0
-        for x in range(0,6):
-            for y in range(0,6):
-                for z in range(0,6):
+        for x in range(0,self.ncell):
+            for y in range(0,self.ncell):
+                for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a
                     self.ypositions[particle] = y*self.a
                     self.zpositions[particle] = z*self.a
                     particle += 1
             
-            for y in range(0,6):
-                for z in range(0,6):
+            for y in range(0,self.ncell):
+                for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a
                     self.ypositions[particle] = y*self.a + self.a2
                     self.zpositions[particle] = z*self.a + self.a2
                     particle += 1
                     
-        for x in range(0,6):
-            for y in range(0,6):
-                for z in range(0,6):
+        for x in range(0,self.ncell):
+            for y in range(0,self.ncell):
+                for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a + self.a2
                     self.ypositions[particle] = y*self.a
                     self.zpositions[particle] = z*self.a + self.a2
                     particle += 1
                     
-            for y in range(0,6):
-                for z in range(0,6):
+            for y in range(0,self.ncell):
+                for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a + self.a2
                     self.ypositions[particle] = y*self.a + self.a2
                     self.zpositions[particle] = z*self.a
@@ -112,10 +115,15 @@ class LJ_ARGON:
         normdist = array.array('f')
         mean_velocity = math.sqrt(self.kb*self.temp/self.M)
         
+        # creating a gaussian distrobution around 0 with std. dev. of mean velocity
+        start = time.time()        
         for i in range(0,3*self.N):
             normdist.append(random.gauss(0,1))
             normdist[i] *= mean_velocity
-            
+        stop = time.time()
+        print(str(stop-start))        
+        
+        # assigning atoms velocities from the gaussian distrobution
         for atom in range(0, self.N):
             self.xvelocities[atom] = normdist[3*atom]
             self.yvelocities[atom] = normdist[3*atom+1]
@@ -141,37 +149,41 @@ class LJ_ARGON:
             
            
     def timestep(self):
+        # main time step that calls functions to perform posistion adjustments
+        # for each time step
         for step in range(0, self.nstep):
             self.updateforces()
             self.updatevelocities()
             self.updatepositions()
-            #print('position ' + str(self.xpositions[238]))
-            #print('velocity ' +str(self.xvelocities[238]))
-            #print('force ' +str(self.xforces[238]))
             self.temperature()
-            self.temprecalibration()
             self.velocityautocorrelation()
+            self.temprecalibration()
             print("--------------------Completed Step Number " + str(self.count) + "--------------------")       
             self.count += 1
 
     def updateforces(self):
+        # calculates the forces acting on each atom over one timestep
         for atom in range(0,self.N):
             self.xforces[atom] = 0
             self.yforces[atom] = 0
             self.zforces[atom] = 0
         
+        # calculating the distance between each pair of atoms        
         for atom1 in range(0,self.N-1):
             for atom2 in range(atom1+1,self.N):
                 dx = self.xpositions[atom1]-self.xpositions[atom2]
                 dy = self.ypositions[atom1]-self.ypositions[atom2]
                 dz = self.zpositions[atom1]-self.zpositions[atom2]
                 
+                
+                # making sure we use the closest image                
                 dx -= self.L*round(dx/self.L)
                 dy -= self.L*round(dy/self.L)
                 dz -= self.L*round(dz/self.L)
                 
                 r2 = dx**2 + dy**2 + dz**2
                 
+                # if atom is within range, calculating Lennard-Jones force                
                 if r2 < self.R2:
                     sr2 = (self.sigma**2)/r2
                     sr6 = sr2**3
@@ -184,6 +196,8 @@ class LJ_ARGON:
                     self.zforces[atom1] += force*dz
                     self.zforces[atom2] -= force*dz
     def updatevelocities(self):
+        # updates the current velocity based on the previous velocity and the 
+        # forces acting on the atoms
         for atom in range(0,self.N):
             self.xvelocities[atom] += self.xforces[atom]/self.M*self.dt
             self.yvelocities[atom] += self.yforces[atom]/self.M*self.dt
@@ -191,11 +205,15 @@ class LJ_ARGON:
             
             
     def updatepositions(self):
+        # updates the position of each atom based on the previous position
+        # and the current velocity of the atom
         for atom in range(0,self.N):
             self.xpositions[atom] += self.xvelocities[atom]*self.dt
             self.ypositions[atom] += self.yvelocities[atom]*self.dt
             self.zpositions[atom] += self.zvelocities[atom]*self.dt
             
+            
+            # implementing periodic boundary conditions            
             if self.xpositions[atom] < 0:
                 self.xpositions[atom] += self.L
             elif self.xpositions[atom] > self.L:
@@ -212,6 +230,7 @@ class LJ_ARGON:
                 self.zpositions[atom] -= self.L
             
     def temperature(self):
+        # finds the current temperature of the system based on velocities
        sumv2 = 0
        for atom in range(0,self.N):
            sumv2 += self.xvelocities[atom]**2 + self.yvelocities[atom]**2 + self.zvelocities[atom]**2
@@ -220,8 +239,10 @@ class LJ_ARGON:
        print("TEMP: " + str(self.simtemp))
        
     def temprecalibration(self):
+        # adjusts the velocities of the atoms to adjust the temperature to 
+        # match the wanted temperature
        if self.count > 125:
-           if self.simtemp > 100.0 or self.simtemp<80:
+           if self.simtemp > self.temp + 10 or self.simtemp < self.temp-10:
                print("temperature recalibration")
                for atom in range(0,self.N):
                    self.xvelocities[atom] *=math.sqrt(self.temp/self.simtemp)
@@ -229,7 +250,9 @@ class LJ_ARGON:
                    self.zvelocities[atom] *=math.sqrt(self.temp/self.simtemp)
                    
     def velocityautocorrelation(self):
-        if self.count == 1:
+        # computes the average dot product of velocity, should tend toward 0
+        # normalized by the correlation for the first time step
+        if self.count == 1: # calculating for first step to normalize
             sumvdot = 0
             for atom in range(0,self.N):
                 sumvdot += self.xvelocities[atom]*self.initialxvelocities[atom]
@@ -238,16 +261,18 @@ class LJ_ARGON:
             self.vacf1 = sumvdot/self.N
             
             
-        sumvdot = 0
-        for atom in range(0,self.N):
+        sumvdot = 0 # reset each timestep
+        for atom in range(0,self.N): # calculate function for timestep
             sumvdot += self.xvelocities[atom]*self.initialxvelocities[atom]
             sumvdot += self.yvelocities[atom]*self.initialyvelocities[atom]
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
         print("Velocity Autocorrelation Function: " + str(self.vacf))
     
-    def timeindependentcorrelationfunction(self):
-        start = time.time()       
+    def pairdistrobutionfunction(self):
+        # calculates the number of atoms in a shell around the central atom
+        # averaged over all atoms
+              
         for atom1 in range(0,self.N-1):
             for atom2 in range(atom1,self.N):
                 dx = self.xpositions[atom1]-self.xpositions[atom2]
@@ -261,17 +286,16 @@ class LJ_ARGON:
                 r2 = dx**2 + dy**2 + dz**2
             
                 
-            for radius in range(0,50):
-                if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
-                    self.n[radius] += 1
+                for radius in range(0,self.npair):
+                    if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
+                        self.n[radius] += 1
                     
-        for radius in range(1,50):
+        for radius in range(1,self.npair):
             self.g[radius] = 2*self.L**3/self.N**2*self.n[radius]/4/math.pi/(radius*self.dr)**2/self.dr
             
         print("r                        g(r)")
         
-        for radius in range(0,50):
+        for radius in range(0,self.npair):
             print(str(radius*self.dr) + "                " + str(self.g[radius]))
             
-        stop = time.time()
-        print(str(stop-start))
+        
