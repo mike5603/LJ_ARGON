@@ -10,9 +10,13 @@ tic = time.time()
 simulation = LJ_ARGON()
 
 
-#simulation.timestep()
-#simulation.pairdistrobutionfunction()
-
+simulation.timestep()
+simulation.pairdistrobutionfunction()
+simulation.writetemp()
+simulation.writevacf()
+simulation.writetime()
+simulation.writeradius()
+simulation.writepairdistrobution()
 toc = time.time()
 
-#print(str(toc-tic))
+print("length of run: " + str((toc-tic)/60) + " minutes")

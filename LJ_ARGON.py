@@ -5,7 +5,7 @@ import array
 import random
 import math
 import time
-
+import os
 
 class LJ_ARGON:
     # constants used in calculation
@@ -20,7 +20,7 @@ class LJ_ARGON:
     ncell = int(math.ceil((N/4)**(1.0/3.0))) # number of fc unit cells in box
     a = L/ncell # length of unit cell for fcc
     a2 = a/2 # half of the unit cell length
-    nstep = 500 # number of time steps
+    nstep = 2000 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
     count = 1 # count of timesteps
@@ -32,30 +32,70 @@ class LJ_ARGON:
     sumvz = 0 # placeholder for later calculation
     dr = sigma/10 # thickness of shell in pair distrobution function
     maxr = 5*sigma # the maximum radius for pair distrobution function
-    npair = maxr/dr # number of shells in pair distrobution function
+    npair = int(math.ceil(maxr/dr)) # number of shells in pair distrobution function
     
-    
+    # creates position arrays
     xpositions = array.array('f')
     ypositions = array.array('f')
     zpositions = array.array('f')
 
+    # creates velocity arrays    
     xvelocities = array.array('f')
     yvelocities = array.array('f')
     zvelocities = array.array('f')
     
+    # creates force arrays
     xforces = array.array('f')
     yforces = array.array('f')
     zforces = array.array('f')
     
+    # creates velocity arrays
     initialxvelocities = array.array('f')
     initialyvelocities = array.array('f')
     initialzvelocities = array.array('f')
     
+    # creates arrays for pair-distrobution function
     n = array.array('f')
-    
     g = array.array('f')
+    
+    # creates arrays for file writing
+    temperatures = array.array('f')
+    velacf = array.array('f')
 
-    def __init__(self):
+    def __init__(self): # initialize method including initial positions and velocities
+        
+        try:
+            os.remove("argon.xyz")
+        except OSError:
+            pass        
+        
+        try:
+            os.remove("temp.csv")
+        except OSError:
+            pass
+        
+        try:
+            os.remove("time.csv")
+        except OSError:
+            pass
+        
+        try:
+            os.remove("vacf.csv")
+        except OSError:
+            pass
+        
+        try:
+            os.remove("radius.csv")
+        except OSError:
+            pass
+        
+        try:
+            os.remove("pairdistrobution.csv")
+        except OSError:
+            pass
+        
+        
+        
         for i in range(0, self.N):
             self.xpositions.append(0)
             self.ypositions.append(0)
@@ -72,13 +112,15 @@ class LJ_ARGON:
         self.initialposition()
         self.initialvelocities()
         
-        for i in range(0,50):
+        for i in range(0,self.npair):
             self.n.append(0)
             self.g.append(0)
         
     def initialposition(self):
-        #assigns initial postions of atoms
+        #assigns initial postions of atoms to FCC structure
         particle = 0
+        
+        # assigns simple cubic positions         
         for x in range(0,self.ncell):
             for y in range(0,self.ncell):
                 for z in range(0,self.ncell):
@@ -87,6 +129,7 @@ class LJ_ARGON:
                     self.zpositions[particle] = z*self.a
                     particle += 1
             
+            # assigns atoms on x face
             for y in range(0,self.ncell):
                 for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a
@@ -94,6 +137,7 @@ class LJ_ARGON:
                     self.zpositions[particle] = z*self.a + self.a2
                     particle += 1
                     
+        # assigns atoms on y face
         for x in range(0,self.ncell):
             for y in range(0,self.ncell):
                 for z in range(0,self.ncell):
@@ -102,26 +146,25 @@ class LJ_ARGON:
                     self.zpositions[particle] = z*self.a + self.a2
                     particle += 1
                     
+            # assigns atoms on z face
             for y in range(0,self.ncell):
                 for z in range(0,self.ncell):
                     self.xpositions[particle] = x*self.a + self.a2
                     self.ypositions[particle] = y*self.a + self.a2
                     self.zpositions[particle] = z*self.a
                     particle += 1
+                    
+        self.writetoxyz()
         
-                        
     def initialvelocities(self):
         # assigns initial velocities to atoms according to a Boltzmann distrobution
         normdist = array.array('f')
         mean_velocity = math.sqrt(self.kb*self.temp/self.M)
         
-        # creating a gaussian distrobution around 0 with std. dev. of mean velocity
-        start = time.time()        
+        # creating a gaussian distrobution around 0 with std. dev. of mean velocity   
         for i in range(0,3*self.N):
             normdist.append(random.gauss(0,1))
             normdist[i] *= mean_velocity
-        stop = time.time()
-        print(str(stop-start))        
         
         # assigning atoms velocities from the gaussian distrobution
         for atom in range(0, self.N):
@@ -131,12 +174,14 @@ class LJ_ARGON:
             self.sumvx += self.xvelocities[atom]
             self.sumvy += self.yvelocities[atom]
             self.sumvz += self.zvelocities[atom]
-            
+        
+        # correcting overall momentum (should be 0)
         for atom in range(0,self.N):
             self.xvelocities[atom] -= self.sumvx/self.N
             self.yvelocities[atom] -= self.sumvy/self.N
             self.zvelocities[atom] -= self.sumvz/self.N
-            
+        
+        #setting initial velocity to be same as atom velocity
         for atom in range(0, self.N):
             self.initialxvelocities[atom] = normdist[3*atom]
             self.initialyvelocities[atom] = normdist[3*atom+1]
@@ -147,7 +192,6 @@ class LJ_ARGON:
             self.initialyvelocities[atom] -= self.sumvy/self.N
             self.initialzvelocities[atom] -= self.sumvz/self.N
             
-           
     def timestep(self):
         # main time step that calls functions to perform posistion adjustments
         # for each time step
@@ -158,6 +202,7 @@ class LJ_ARGON:
             self.temperature()
             self.velocityautocorrelation()
             self.temprecalibration()
+            self.writetoxyz()
             print("--------------------Completed Step Number " + str(self.count) + "--------------------")       
             self.count += 1
 
@@ -173,8 +218,7 @@ class LJ_ARGON:
             for atom2 in range(atom1+1,self.N):
                 dx = self.xpositions[atom1]-self.xpositions[atom2]
                 dy = self.ypositions[atom1]-self.ypositions[atom2]
-                dz = self.zpositions[atom1]-self.zpositions[atom2]
-                
+                dz = self.zpositions[atom1]-self.zpositions[atom2] 
                 
                 # making sure we use the closest image                
                 dx -= self.L*round(dx/self.L)
@@ -195,6 +239,7 @@ class LJ_ARGON:
                     self.yforces[atom2] -= force*dy
                     self.zforces[atom1] += force*dz
                     self.zforces[atom2] -= force*dz
+                    
     def updatevelocities(self):
         # updates the current velocity based on the previous velocity and the 
         # forces acting on the atoms
@@ -211,7 +256,6 @@ class LJ_ARGON:
             self.xpositions[atom] += self.xvelocities[atom]*self.dt
             self.ypositions[atom] += self.yvelocities[atom]*self.dt
             self.zpositions[atom] += self.zvelocities[atom]*self.dt
-            
             
             # implementing periodic boundary conditions            
             if self.xpositions[atom] < 0:
@@ -237,11 +281,12 @@ class LJ_ARGON:
        
        self.simtemp = self.M/3/self.N/self.kb*sumv2
        print("TEMP: " + str(self.simtemp))
+       self.temperatures.append(self.simtemp)
        
     def temprecalibration(self):
         # adjusts the velocities of the atoms to adjust the temperature to 
         # match the wanted temperature
-       if self.count > 125:
+       if self.count > 15:
            if self.simtemp > self.temp + 10 or self.simtemp < self.temp-10:
                print("temperature recalibration")
                for atom in range(0,self.N):
@@ -260,7 +305,6 @@ class LJ_ARGON:
                 sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
             self.vacf1 = sumvdot/self.N
             
-            
         sumvdot = 0 # reset each timestep
         for atom in range(0,self.N): # calculate function for timestep
             sumvdot += self.xvelocities[atom]*self.initialxvelocities[atom]
@@ -268,6 +312,7 @@ class LJ_ARGON:
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
         print("Velocity Autocorrelation Function: " + str(self.vacf))
+        self.velacf.append(self.vacf)
     
     def pairdistrobutionfunction(self):
         # calculates the number of atoms in a shell around the central atom
@@ -285,7 +330,6 @@ class LJ_ARGON:
                 
                 r2 = dx**2 + dy**2 + dz**2
             
-                
                 for radius in range(0,self.npair):
                     if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
                         self.n[radius] += 1
@@ -298,4 +342,40 @@ class LJ_ARGON:
         for radius in range(0,self.npair):
             print(str(radius*self.dr) + "                " + str(self.g[radius]))
             
+    def writetoxyz(self):
+        xyz = open("argon.xyz", "a")
+        xyz.write(str(self.N) + "\n")
+        xyz.write("positions of argon atom for timestep " + str(self.count) + "\n")
+        for atom in range(0,self.N):
+            xyz.write("Ar " + str(self.xpositions[atom]) + " " + str(self.ypositions[atom]) + " " + str(self.zpositions[atom]) + "\n")
+        xyz.close()
         
+    def writetemp(self):
+        tempfile = open("temp.csv", "a")
+        for entry in range(0,self.nstep):
+            tempfile.write(str(self.temperatures[entry]) + "\n")
+        tempfile.close()
+        
+    def writevacf(self):
+        vacffile = open("vacf.csv", "a")
+        for entry in range(0,self.nstep):
+            vacffile.write(str(self.velacf[entry]) + "\n")
+        vacffile.close()
+            
+    def writetime(self):
+        timefile = open("time.csv", "a")
+        for entry in range(0,self.nstep):
+            timefile.write(str(entry*self.dt)+ "\n")
+        timefile.close()
+            
+    def writeradius(self):
+        radiusfile = open("radius.csv", "a")
+        for radius in range(0,self.npair):
+            radiusfile.write(str(radius*self.dr) + "\n")
+        radiusfile.close()
+            
+    def writepairdistrobution(self):
+        gfile = open("pairdistrobution.csv", "a")
+        for radius in range(0,self.npair):
+            gfile.write(str(self.g[radius]) + "\n")
+        gfile.close()
