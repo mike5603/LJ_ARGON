@@ -20,7 +20,7 @@ class LJ_ARGON:
     ncell = int(math.ceil((N/4)**(1.0/3.0))) # number of fc unit cells in box
     a = L/ncell # length of unit cell for fcc
     a2 = a/2 # half of the unit cell length
-    nstep = 2000 # number of time steps
+    nstep = 200 # number of time steps
     temp = 90 # initial temperature
     dt = 1e-14 # time step, seconds
     count = 1 # count of timesteps
