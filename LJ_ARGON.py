@@ -30,9 +30,10 @@ class LJ_ARGON:
     sumvx = 0 # placeholder for later calculation
     sumvy = 0 # placeholder for later calculation
     sumvz = 0 # placeholder for later calculation
-    dr = sigma/10 # thickness of shell in pair distrobution function
+    dr = sigma/50 # thickness of shell in pair distrobution function
     maxr = 5*sigma # the maximum radius for pair distrobution function
     npair = int(math.ceil(maxr/dr)) # number of shells in pair distrobution function
+    gframes = 20 # number of frames which the pair distribution function is averaged over
     
     # creates position arrays
     xpositions = array.array('f')
@@ -68,33 +69,6 @@ class LJ_ARGON:
             os.remove("argon.xyz")
         except OSError:
             pass        
-        
-        try:
-            os.remove("temp.csv")
-        except OSError:
-            pass
-        
-        try:
-            os.remove("time.csv")
-        except OSError:
-            pass
-        
-        try:
-            os.remove("vacf.csv")
-        except OSError:
-            pass
-        
-        try:
-            os.remove("radius.csv")
-        except OSError:
-            pass
-        
-        try:
-            os.remove("pairdistrobution.csv")
-        except OSError:
-            pass
-        
-        
         
         for i in range(0, self.N):
             self.xpositions.append(0)
@@ -240,6 +214,11 @@ class LJ_ARGON:
                     self.zforces[atom1] += force*dz
                     self.zforces[atom2] -= force*dz
                     
+                if self.count > (self.nstep-self.gframes):
+                    for radius in range(0,self.npair):
+                        if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
+                            self.n[radius] += 1                    
+                    
     def updatevelocities(self):
         # updates the current velocity based on the previous velocity and the 
         # forces acting on the atoms
@@ -247,7 +226,6 @@ class LJ_ARGON:
             self.xvelocities[atom] += self.xforces[atom]/self.M*self.dt
             self.yvelocities[atom] += self.yforces[atom]/self.M*self.dt
             self.zvelocities[atom] += self.zforces[atom]/self.M*self.dt
-            
             
     def updatepositions(self):
         # updates the position of each atom based on the previous position
@@ -280,7 +258,6 @@ class LJ_ARGON:
            sumv2 += self.xvelocities[atom]**2 + self.yvelocities[atom]**2 + self.zvelocities[atom]**2
        
        self.simtemp = self.M/3/self.N/self.kb*sumv2
-       print("TEMP: " + str(self.simtemp))
        self.temperatures.append(self.simtemp)
        
     def temprecalibration(self):
@@ -311,31 +288,15 @@ class LJ_ARGON:
             sumvdot += self.yvelocities[atom]*self.initialyvelocities[atom]
             sumvdot += self.zvelocities[atom]*self.initialzvelocities[atom]
         self.vacf = (sumvdot/self.N)/self.vacf1
-        print("Velocity Autocorrelation Function: " + str(self.vacf))
         self.velacf.append(self.vacf)
     
     def pairdistrobutionfunction(self):
         # calculates the number of atoms in a shell around the central atom
         # averaged over all atoms
-              
-        for atom1 in range(0,self.N-1):
-            for atom2 in range(atom1,self.N):
-                dx = self.xpositions[atom1]-self.xpositions[atom2]
-                dy = self.ypositions[atom1]-self.ypositions[atom2]
-                dz = self.zpositions[atom1]-self.zpositions[atom2]
-                
-                dx -= self.L*round(dx/self.L)
-                dy -= self.L*round(dy/self.L)
-                dz -= self.L*round(dz/self.L)
-                
-                r2 = dx**2 + dy**2 + dz**2
-            
-                for radius in range(0,self.npair):
-                    if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
-                        self.n[radius] += 1
+        #averaged over last 10 frames
                     
         for radius in range(1,self.npair):
-            self.g[radius] = 2*self.L**3/self.N**2*self.n[radius]/4/math.pi/(radius*self.dr)**2/self.dr
+            self.g[radius] = 2*self.L**3/self.N**2*self.n[radius]/4/math.pi/(radius*self.dr)**2/self.dr/self.gframes
             
         print("r                        g(r)")
         
@@ -347,35 +308,65 @@ class LJ_ARGON:
         xyz.write(str(self.N) + "\n")
         xyz.write("positions of argon atom for timestep " + str(self.count) + "\n")
         for atom in range(0,self.N):
-            xyz.write("Ar " + str(self.xpositions[atom]) + " " + str(self.ypositions[atom]) + " " + str(self.zpositions[atom]) + "\n")
+            xyz.write("Ar " + str(self.xpositions[atom]*1e10) + " " + str(self.ypositions[atom]*1e10) + " " + str(self.zpositions[atom]*1e10) + "\n")
         xyz.close()
         
     def writetemp(self):
+        
+        try:
+            os.remove("temp.csv")
+        except OSError:
+            pass
+        
         tempfile = open("temp.csv", "a")
         for entry in range(0,self.nstep):
             tempfile.write(str(self.temperatures[entry]) + "\n")
         tempfile.close()
         
     def writevacf(self):
+        
+        try:
+            os.remove("vacf.csv")
+        except OSError:
+            pass
+        
         vacffile = open("vacf.csv", "a")
         for entry in range(0,self.nstep):
             vacffile.write(str(self.velacf[entry]) + "\n")
         vacffile.close()
             
     def writetime(self):
+        
+        try:
+            os.remove("time.csv")
+        except OSError:
+            pass
+        
         timefile = open("time.csv", "a")
         for entry in range(0,self.nstep):
             timefile.write(str(entry*self.dt)+ "\n")
         timefile.close()
             
     def writeradius(self):
+        
+        try:
+            os.remove("radius.csv")
+        except OSError:
+            pass        
+        
         radiusfile = open("radius.csv", "a")
         for radius in range(0,self.npair):
             radiusfile.write(str(radius*self.dr) + "\n")
         radiusfile.close()
             
-    def writepairdistrobution(self):
-        gfile = open("pairdistrobution.csv", "a")
+    def writepairdistribution(self):
+        
+        try:
+            os.remove("pairdistribution.csv")
+        except OSError:
+            pass        
+        
+        gfile = open("pairdistribution.csv", "a")
         for radius in range(0,self.npair):
             gfile.write(str(self.g[radius]) + "\n")
         gfile.close()
