@@ -12,7 +12,7 @@ temp = np.loadtxt('temp.csv')
 time = np.loadtxt('time.csv')
 vacf = np.loadtxt('vacf.csv')
 radius = np.loadtxt('radius.csv')
-g = np.loadtxt('pairdistrobution.csv')
+g = np.loadtxt('pairdistribution.csv')
 
 plt.figure()
 plt.plot(radius,g)

@@ -57,6 +57,7 @@ class LJ_ARGON:
     
     # creates arrays for pair-distrobution function
     n = array.array('f')
+    n2 = array.array('f')
     g = array.array('f')
     
     # creates arrays for file writing
@@ -215,9 +216,12 @@ class LJ_ARGON:
                     self.zforces[atom2] -= force*dz
                     
                 if self.count > (self.nstep-self.gframes):
-                    for radius in range(0,self.npair):
-                        if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
-                            self.n[radius] += 1                    
+                    #for radius in range(0,self.npair):
+                        #if r2 > (radius*self.dr)**2 and r2 < ((radius+1)*(self.dr))**2:
+                            #self.n[radius] += 1                    
+                    if r2 < (self.maxr+self.dr)**2:
+                        self.n[int(math.floor(math.sqrt(r2)/(self.dr)))] += 1
+                    
                     
     def updatevelocities(self):
         # updates the current velocity based on the previous velocity and the 
@@ -290,10 +294,10 @@ class LJ_ARGON:
         self.vacf = (sumvdot/self.N)/self.vacf1
         self.velacf.append(self.vacf)
     
-    def pairdistrobutionfunction(self):
+    def pairdistributionfunction(self):
         # calculates the number of atoms in a shell around the central atom
         # averaged over all atoms
-        #averaged over last 10 frames
+        #averaged over last n frames (defined in constants)
                     
         for radius in range(1,self.npair):
             self.g[radius] = 2*self.L**3/self.N**2*self.n[radius]/4/math.pi/(radius*self.dr)**2/self.dr/self.gframes
@@ -304,6 +308,7 @@ class LJ_ARGON:
             print(str(radius*self.dr) + "                " + str(self.g[radius]))
             
     def writetoxyz(self):
+        # creates and xyz file to load into vmd for animation
         xyz = open("argon.xyz", "a")
         xyz.write(str(self.N) + "\n")
         xyz.write("positions of argon atom for timestep " + str(self.count) + "\n")
@@ -312,7 +317,7 @@ class LJ_ARGON:
         xyz.close()
         
     def writetemp(self):
-        
+        # writes a csv file with the temperature at each timestep
         try:
             os.remove("temp.csv")
         except OSError:
@@ -324,7 +329,7 @@ class LJ_ARGON:
         tempfile.close()
         
     def writevacf(self):
-        
+        # writes a csv file with the velocity autocorrelation function at each timestep
         try:
             os.remove("vacf.csv")
         except OSError:
@@ -336,7 +341,7 @@ class LJ_ARGON:
         vacffile.close()
             
     def writetime(self):
-        
+        # creates a csv file with the time at each timestep
         try:
             os.remove("time.csv")
         except OSError:
@@ -348,7 +353,7 @@ class LJ_ARGON:
         timefile.close()
             
     def writeradius(self):
-        
+        # creates a csv file with the radius at each radius step
         try:
             os.remove("radius.csv")
         except OSError:
@@ -360,7 +365,7 @@ class LJ_ARGON:
         radiusfile.close()
             
     def writepairdistribution(self):
-        
+        # writes a csv file with the pair distribution at each radius step
         try:
             os.remove("pairdistribution.csv")
         except OSError:
